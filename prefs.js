@@ -64,15 +64,21 @@ const PersonRow = GObject.registerClass({
     GTypeName: 'PersonRow',
     Signals: {
         'remove': {},
-        'edit': {param_types: [GObject.TYPE_STRING]},
+        'edit': {},
     },
 }, class PersonRow extends Adw.ActionRow {
-    _init(personName) {
+    _init(person) {
+        // Handle both old string format and new object format
+        if (typeof person === 'string') {
+            person = {name: person, email: ''};
+        }
+
         super._init({
-            title: personName,
+            title: person.name,
+            subtitle: person.email || _('No email'),
         });
 
-        this._personName = personName;
+        this._person = person;
 
         // Edit button
         const editButton = new Gtk.Button({
@@ -118,18 +124,31 @@ const PersonRow = GObject.registerClass({
             margin_end: 12,
         });
 
-        const label = new Gtk.Label({
+        const nameLabel = new Gtk.Label({
             label: _('Name:'),
             xalign: 0,
         });
-        box.append(label);
+        box.append(nameLabel);
 
-        const entry = new Gtk.Entry({
-            text: this._personName,
+        const nameEntry = new Gtk.Entry({
+            text: this._person.name,
             placeholder_text: _('Enter person name'),
+        });
+        box.append(nameEntry);
+
+        const emailLabel = new Gtk.Label({
+            label: _('Email (for Gravatar):'),
+            xalign: 0,
+            margin_top: 6,
+        });
+        box.append(emailLabel);
+
+        const emailEntry = new Gtk.Entry({
+            text: this._person.email || '',
+            placeholder_text: _('Enter email address'),
             activates_default: true,
         });
-        box.append(entry);
+        box.append(emailEntry);
 
         content.append(box);
 
@@ -137,23 +156,26 @@ const PersonRow = GObject.registerClass({
 
         dialog.connect('response', (dialog, response) => {
             if (response === Gtk.ResponseType.OK) {
-                const name = entry.get_text().trim();
-                if (name.length > 0 && name !== this._personName) {
-                    this._personName = name;
+                const name = nameEntry.get_text().trim();
+                const email = emailEntry.get_text().trim();
+                if (name.length > 0) {
+                    this._person.name = name;
+                    this._person.email = email;
                     this.set_title(name);
-                    this.emit('edit', name);
+                    this.set_subtitle(email || _('No email'));
+                    this.emit('edit');
                 }
             }
             dialog.destroy();
         });
 
         dialog.show();
-        entry.grab_focus();
-        entry.select_region(0, -1);
+        nameEntry.grab_focus();
+        nameEntry.select_region(0, -1);
     }
 
-    getPersonName() {
-        return this._personName;
+    getPerson() {
+        return this._person;
     }
 });
 
@@ -237,8 +259,8 @@ const TimezoneRow = GObject.registerClass({
         this.add_row(addPersonRow);
     }
 
-    _addPersonRow(personName) {
-        const personRow = new PersonRow(personName);
+    _addPersonRow(person) {
+        const personRow = new PersonRow(person);
 
         personRow.connect('remove', () => {
             const index = this._personRows.indexOf(personRow);
@@ -247,15 +269,15 @@ const TimezoneRow = GObject.registerClass({
                 this.remove(personRow);
 
                 // Update data
-                this._timezone.people = this._personRows.map(row => row.getPersonName());
+                this._timezone.people = this._personRows.map(row => row.getPerson());
                 this._updateSubtitle();
                 this.emit('changed');
             }
         });
 
         personRow.connect('edit', () => {
-            // Update data when person name is edited
-            this._timezone.people = this._personRows.map(row => row.getPersonName());
+            // Update data when person is edited
+            this._timezone.people = this._personRows.map(row => row.getPerson());
             this.emit('changed');
         });
 
@@ -290,17 +312,29 @@ const TimezoneRow = GObject.registerClass({
             margin_end: 12,
         });
 
-        const label = new Gtk.Label({
+        const nameLabel = new Gtk.Label({
             label: _('Name:'),
             xalign: 0,
         });
-        box.append(label);
+        box.append(nameLabel);
 
-        const entry = new Gtk.Entry({
+        const nameEntry = new Gtk.Entry({
             placeholder_text: _('Enter person name'),
+        });
+        box.append(nameEntry);
+
+        const emailLabel = new Gtk.Label({
+            label: _('Email (for Gravatar):'),
+            xalign: 0,
+            margin_top: 6,
+        });
+        box.append(emailLabel);
+
+        const emailEntry = new Gtk.Entry({
+            placeholder_text: _('Enter email address'),
             activates_default: true,
         });
-        box.append(entry);
+        box.append(emailEntry);
 
         content.append(box);
 
@@ -308,10 +342,12 @@ const TimezoneRow = GObject.registerClass({
 
         dialog.connect('response', (dialog, response) => {
             if (response === Gtk.ResponseType.OK) {
-                const name = entry.get_text().trim();
+                const name = nameEntry.get_text().trim();
+                const email = emailEntry.get_text().trim();
                 if (name.length > 0) {
-                    this._timezone.people.push(name);
-                    this._addPersonRow(name);
+                    const person = {name: name, email: email};
+                    this._timezone.people.push(person);
+                    this._addPersonRow(person);
                     this._updateSubtitle();
                     this.emit('changed');
                 }
@@ -320,7 +356,7 @@ const TimezoneRow = GObject.registerClass({
         });
 
         dialog.show();
-        entry.grab_focus();
+        nameEntry.grab_focus();
     }
 
     _updateSubtitle() {

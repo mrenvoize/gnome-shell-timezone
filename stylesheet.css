@@ -22,6 +22,15 @@
     color: #aaaaaa;
 }
 
+.timezone-person-container {
+    spacing: 6px;
+}
+
+.timezone-avatar {
+    border-radius: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
 .timezone-scroll {
     max-width: 800px;
 }

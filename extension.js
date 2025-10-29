@@ -19,7 +19,9 @@
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
 import Clutter from 'gi://Clutter';
+import Soup from 'gi://Soup';
 
 import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
@@ -27,15 +29,37 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+/**
+ * Generate SHA-256 hash of a string
+ */
+function sha256(str) {
+    const checksum = GLib.Checksum.new(GLib.ChecksumType.SHA256);
+    checksum.update(new TextEncoder().encode(str));
+    return checksum.get_string();
+}
+
+/**
+ * Generate Gravatar URL from email address
+ */
+function getGravatarUrl(email, size = 48) {
+    if (!email || email.trim() === '') {
+        return null;
+    }
+    const normalized = email.trim().toLowerCase();
+    const hash = sha256(normalized);
+    return `https://gravatar.com/avatar/${hash}?s=${size}&d=mp`;
+}
+
 const TimezoneIndicator = GObject.registerClass({
     Signals: {
         'open-preferences': {},
     },
 }, class TimezoneIndicator extends PanelMenu.Button {
     _init(settings) {
-        super._init(0.0, _('Timezones'));
+        super._init(0.5, _('Timezones'));
 
         this._settings = settings;
+        this._httpSession = new Soup.Session();
 
         // Add clock icon to panel
         this._icon = new St.Icon({
@@ -149,15 +173,44 @@ const TimezoneIndicator = GObject.registerClass({
         });
         container.add_child(tzLabel);
 
-        // People names
+        // People with avatars
         if (tz.people && tz.people.length > 0) {
             for (const person of tz.people) {
+                const personContainer = new St.BoxLayout({
+                    style_class: 'timezone-person-container',
+                    vertical: false,
+                    style: 'margin-top: 4px; spacing: 6px;',
+                });
+
+                // Handle both old string format and new object format
+                const personName = typeof person === 'string' ? person : person.name;
+                const personEmail = typeof person === 'string' ? '' : (person.email || '');
+
+                // Add Gravatar image if email is available
+                if (personEmail) {
+                    const avatarUrl = getGravatarUrl(personEmail, 32);
+                    if (avatarUrl) {
+                        const avatar = new St.Icon({
+                            style_class: 'timezone-avatar',
+                            icon_size: 32,
+                            style: 'border-radius: 16px;',
+                        });
+
+                        // Load Gravatar image
+                        this._loadGravatar(avatar, avatarUrl);
+                        personContainer.add_child(avatar);
+                    }
+                }
+
                 const personLabel = new St.Label({
                     style_class: 'timezone-person',
-                    text: person,
-                    style: 'font-size: 10pt; margin-top: 2px;',
+                    text: personName,
+                    style: 'font-size: 10pt;',
+                    y_align: Clutter.ActorAlign.CENTER,
                 });
-                container.add_child(personLabel);
+                personContainer.add_child(personLabel);
+
+                container.add_child(personContainer);
             }
         }
 
@@ -166,6 +219,52 @@ const TimezoneIndicator = GObject.registerClass({
         container._timezone = tz.timezone;
 
         return container;
+    }
+
+    _loadGravatar(iconWidget, url) {
+        try {
+            const message = Soup.Message.new('GET', url);
+
+            this._httpSession.send_and_read_async(
+                message,
+                GLib.PRIORITY_DEFAULT,
+                null,
+                (session, result) => {
+                    try {
+                        if (message.get_status() === Soup.Status.OK) {
+                            const bytes = session.send_and_read_finish(result);
+
+                            // Save to temporary file
+                            const tmpFile = Gio.File.new_for_path(
+                                `${GLib.get_tmp_dir()}/gravatar_${GLib.uuid_string_random()}.jpg`
+                            );
+
+                            const outputStream = tmpFile.replace(null, false, Gio.FileCreateFlags.NONE, null);
+                            outputStream.write_bytes(bytes, null);
+                            outputStream.close(null);
+
+                            // Load the image from file
+                            const gicon = Gio.FileIcon.new(tmpFile);
+                            iconWidget.set_gicon(gicon);
+
+                            // Clean up temp file after a delay
+                            GLib.timeout_add_seconds(GLib.PRIORITY_LOW, 60, () => {
+                                try {
+                                    tmpFile.delete(null);
+                                } catch (e) {
+                                    // Ignore cleanup errors
+                                }
+                                return GLib.SOURCE_REMOVE;
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Failed to load Gravatar:', e);
+                    }
+                }
+            );
+        } catch (e) {
+            console.error('Failed to fetch Gravatar:', e);
+        }
     }
 
     _getTimezoneName(timezone) {
