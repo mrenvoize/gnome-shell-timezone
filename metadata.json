@@ -1,0 +1,9 @@
+{
+  "name": "Timezones",
+  "description": "Display friends local times at a glance",
+  "uuid": "timezone@renvoize.com",
+  "shell-version": [
+    "49"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.timezone"
+}

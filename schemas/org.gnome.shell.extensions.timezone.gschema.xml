@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.timezone" path="/org/gnome/shell/extensions/timezone/">
+    <key name="timezones" type="s">
+      <default>'[]'</default>
+      <summary>Configured timezones and people</summary>
+      <description>JSON array of objects containing timezone ID and array of person names</description>
+    </key>
+  </schema>
+</schemalist>

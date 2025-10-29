@@ -1,0 +1,27 @@
+/* Timezone extension styling */
+
+.timezone-container {
+    padding: 10px;
+}
+
+.timezone-widget {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    min-width: 120px;
+}
+
+.timezone-time {
+    color: #ffffff;
+}
+
+.timezone-label {
+    color: #cccccc;
+}
+
+.timezone-person {
+    color: #aaaaaa;
+}
+
+.timezone-scroll {
+    max-width: 800px;
+}
