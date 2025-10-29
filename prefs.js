@@ -64,6 +64,7 @@ const PersonRow = GObject.registerClass({
     GTypeName: 'PersonRow',
     Signals: {
         'remove': {},
+        'edit': {param_types: [GObject.TYPE_STRING]},
     },
 }, class PersonRow extends Adw.ActionRow {
     _init(personName) {
@@ -72,6 +73,17 @@ const PersonRow = GObject.registerClass({
         });
 
         this._personName = personName;
+
+        // Edit button
+        const editButton = new Gtk.Button({
+            icon_name: 'document-edit-symbolic',
+            valign: Gtk.Align.CENTER,
+            css_classes: ['flat'],
+        });
+        editButton.connect('clicked', () => {
+            this._showEditDialog();
+        });
+        this.add_suffix(editButton);
 
         // Remove button
         const removeButton = new Gtk.Button({
@@ -83,6 +95,61 @@ const PersonRow = GObject.registerClass({
             this.emit('remove');
         });
         this.add_suffix(removeButton);
+    }
+
+    _showEditDialog() {
+        const dialog = new Gtk.Dialog({
+            title: _('Edit Person'),
+            modal: true,
+            transient_for: this.get_root(),
+        });
+
+        dialog.add_button(_('Cancel'), Gtk.ResponseType.CANCEL);
+        const saveBtn = dialog.add_button(_('Save'), Gtk.ResponseType.OK);
+        saveBtn.add_css_class('suggested-action');
+
+        const content = dialog.get_content_area();
+        const box = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 12,
+            margin_top: 12,
+            margin_bottom: 12,
+            margin_start: 12,
+            margin_end: 12,
+        });
+
+        const label = new Gtk.Label({
+            label: _('Name:'),
+            xalign: 0,
+        });
+        box.append(label);
+
+        const entry = new Gtk.Entry({
+            text: this._personName,
+            placeholder_text: _('Enter person name'),
+            activates_default: true,
+        });
+        box.append(entry);
+
+        content.append(box);
+
+        dialog.set_default_response(Gtk.ResponseType.OK);
+
+        dialog.connect('response', (dialog, response) => {
+            if (response === Gtk.ResponseType.OK) {
+                const name = entry.get_text().trim();
+                if (name.length > 0 && name !== this._personName) {
+                    this._personName = name;
+                    this.set_title(name);
+                    this.emit('edit', name);
+                }
+            }
+            dialog.destroy();
+        });
+
+        dialog.show();
+        entry.grab_focus();
+        entry.select_region(0, -1);
     }
 
     getPersonName() {
@@ -184,6 +251,12 @@ const TimezoneRow = GObject.registerClass({
                 this._updateSubtitle();
                 this.emit('changed');
             }
+        });
+
+        personRow.connect('edit', () => {
+            // Update data when person name is edited
+            this._timezone.people = this._personRows.map(row => row.getPersonName());
+            this.emit('changed');
         });
 
         // Insert before the "Add Person" row (which is always last)
